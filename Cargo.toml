@@ -1,0 +1,26 @@
+[package]
+name = "glean-hs"
+version = "0.1.0"
+edition = "2021"
+authors = ["XF-Interchange LLC <dev@xf-interchange.ai>"]
+description = "Docker-free Haskell code indexing — a Rust-native reimplementation of Meta Glean's dependency stack"
+license = "MIT"
+repository = "https://github.com/XF-Interchange/glean-hs"
+readme = "README.md"
+keywords = ["haskell", "glean", "code-indexing", "rocksdb"]
+categories = ["development-tools"]
+
+[dependencies]
+bytes      = "1"
+smallvec   = "1"
+bytemuck   = "1"
+once_cell  = "1"
+indexmap   = "2"
+rocksdb    = "0.22"
+parking_lot = "0.12"
+num_cpus   = "1"
+thiserror  = "1"
+tracing    = "0.1"
+
+[dev-dependencies]
+quickcheck = "1"
