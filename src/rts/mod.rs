@@ -3,3 +3,7 @@ pub mod nat;
 pub mod string;
 pub mod binary;
 pub mod fact;
+pub mod store;
+pub mod lookup;
+pub mod define;
+pub mod stacked;
