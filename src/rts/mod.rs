@@ -8,3 +8,4 @@ pub mod lookup;
 pub mod define;
 pub mod stacked;
 pub mod factset;
+pub mod bytecode;
