@@ -1,21 +1,20 @@
 //! SysCalls trait — external function interface for the bytecode VM.
 //!
 //! Rust equivalent of glean/rts/bytecode/syscall.h from Meta Glean.
+//! Syscall lists verified against glean/bytecode/Glean/Bytecode/SysCalls.hs.
 //!
-//! When the VM executes a CallFun_* opcode, it calls into the
-//! SysCalls implementation. This decouples the VM from the specific
-//! operations it can perform, making it testable in isolation.
-//!
-//! The actual syscall implementations live in the Glean Haskell layer
-//! and will be connected via FFI in Phase 11 (storage integration).
+//! Two syscall contexts:
+//!   typecheckSysCalls — used during fact typechecking
+//!   userQuerySysCalls — used during query execution (Phase 11+)
 
 use crate::rts::id::{Id, Pid};
 use crate::rts::binary::Output;
 
-/// A bytecode set — an opaque handle to a set of byte strings.
-/// Used by the VM for intermediate result collection.
-/// The actual implementation is provided by the SysCalls implementor.
+/// Opaque handle to a bytestring set.
 pub type BytestringSetHandle = u64;
+
+/// Opaque handle to a word set (integer set).
+pub type WordSetHandle = u64;
 
 /// The result of a VM execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,87 +22,51 @@ pub enum ExitReason {
     /// Subroutine completed normally via Ret.
     Done,
     /// Subroutine hit Suspend — execution paused at pc.
-    /// Resume by calling vm.execute() again with the same frame.
     Suspended { pc: usize },
 }
 
 /// External functions callable from the bytecode VM.
 ///
-/// Implementors provide the actual operations the VM needs —
-/// fact lookup, set manipulation, ID renaming, etc.
-///
-/// This trait is the boundary between the pure Rust VM and
-/// the Glean Haskell layer above it.
+/// Covers typecheckSysCalls from SysCalls.hs:
+///   rename, newSet, insertOutputSet, setToArray, freeSet,
+///   newWordSet_, insertBytesWordSet_, wordSetToArray_,
+///   byteSetToByteArray_, freeWordSet_
 pub trait SysCalls {
-    /// Rename a fact ID — used during fact rebase operations.
-    /// Maps an old Id to a new Id in the current database context.
+    // Bytestring set operations
     fn rename(&mut self, id: Id, pid: Pid) -> Id;
-
-    /// Allocate a new empty bytestring set.
-    /// Returns an opaque handle.
     fn new_set(&mut self) -> BytestringSetHandle;
-
-    /// Insert the contents of an output buffer into a set.
-    fn insert_output_set(
-        &mut self,
-        set: BytestringSetHandle,
-        output: &Output,
-    );
-
-    /// Convert a set to an array, writing to an output buffer.
-    /// Frees the set after conversion.
-    fn set_to_array(
-        &mut self,
-        set: BytestringSetHandle,
-        output: &mut Output,
-    );
-
-    /// Free a bytestring set without converting it.
+    fn insert_output_set(&mut self, set: BytestringSetHandle, output: &Output);
+    fn set_to_array(&mut self, set: BytestringSetHandle, output: &mut Output);
     fn free_set(&mut self, set: BytestringSetHandle);
 
-    /// Look up a fact by predicate and key.
-    /// Returns Id::INVALID if not found.
-    fn lookup_fact(&self, pid: Pid, key: &[u8]) -> Id;
+    // Word set operations (typecheckSysCalls)
+    fn new_word_set(&mut self) -> WordSetHandle;
+    fn insert_bytes_word_set(&mut self, set: WordSetHandle, bytes: &[u8], word: u64);
+    fn word_set_to_array(&mut self, set: WordSetHandle, output: &mut Output);
+    fn byte_set_to_byte_array(&mut self, set: WordSetHandle, output: &mut Output);
+    fn free_word_set(&mut self, set: WordSetHandle);
 
-    /// Get the type (Pid) of a fact by its Id.
-    /// Returns Pid::INVALID if not found.
+    // Fact lookup
+    fn lookup_fact(&self, pid: Pid, key: &[u8]) -> Id;
     fn fact_type(&self, id: Id) -> Pid;
 }
 
 /// A no-op SysCalls implementation for testing the VM in isolation.
-/// All operations are stubs that return safe default values.
 pub struct NoOpSysCalls;
 
 impl SysCalls for NoOpSysCalls {
-    fn rename(&mut self, id: Id, _pid: Pid) -> Id {
-        id // identity rename
-    }
-
-    fn new_set(&mut self) -> BytestringSetHandle {
-        0
-    }
-
-    fn insert_output_set(
-        &mut self,
-        _set: BytestringSetHandle,
-        _output: &Output,
-    ) {}
-
-    fn set_to_array(
-        &mut self,
-        _set: BytestringSetHandle,
-        _output: &mut Output,
-    ) {}
-
+    fn rename(&mut self, id: Id, _pid: Pid) -> Id { id }
+    fn new_set(&mut self) -> BytestringSetHandle { 0 }
+    fn insert_output_set(&mut self, _set: BytestringSetHandle, _output: &Output) {}
+    fn set_to_array(&mut self, _set: BytestringSetHandle, _output: &mut Output) {}
     fn free_set(&mut self, _set: BytestringSetHandle) {}
-
-    fn lookup_fact(&self, _pid: Pid, _key: &[u8]) -> Id {
-        Id::INVALID
-    }
-
-    fn fact_type(&self, _id: Id) -> Pid {
-        Pid::INVALID
-    }
+    fn new_word_set(&mut self) -> WordSetHandle { 0 }
+    fn insert_bytes_word_set(&mut self, _set: WordSetHandle, _bytes: &[u8], _word: u64) {}
+    fn word_set_to_array(&mut self, _set: WordSetHandle, _output: &mut Output) {}
+    fn byte_set_to_byte_array(&mut self, _set: WordSetHandle, _output: &mut Output) {}
+    fn free_word_set(&mut self, _set: WordSetHandle) {}
+    fn lookup_fact(&self, _pid: Pid, _key: &[u8]) -> Id { Id::INVALID }
+    fn fact_type(&self, _id: Id) -> Pid { Pid::INVALID }
 }
 
 #[cfg(test)]
@@ -125,8 +88,23 @@ mod tests {
         sc.insert_output_set(handle, &out);
         let mut out2 = Output::new();
         sc.set_to_array(handle, &mut out2);
-        assert!(out2.is_empty()); // noop — nothing written
+        assert!(out2.is_empty());
         sc.free_set(handle);
+    }
+
+    #[test]
+    fn test_noop_word_set_ops() {
+        let mut sc = NoOpSysCalls;
+        let handle = sc.new_word_set();
+        assert_eq!(handle, 0);
+        sc.insert_bytes_word_set(handle, b"key", 42);
+        let mut out = Output::new();
+        sc.word_set_to_array(handle, &mut out);
+        assert!(out.is_empty());
+        let mut out2 = Output::new();
+        sc.byte_set_to_byte_array(handle, &mut out2);
+        assert!(out2.is_empty());
+        sc.free_word_set(handle);
     }
 
     #[test]
@@ -143,9 +121,6 @@ mod tests {
             ExitReason::Suspended { pc: 42 },
             ExitReason::Suspended { pc: 42 }
         );
-        assert_ne!(
-            ExitReason::Done,
-            ExitReason::Suspended { pc: 0 }
-        );
+        assert_ne!(ExitReason::Done, ExitReason::Suspended { pc: 0 });
     }
 }

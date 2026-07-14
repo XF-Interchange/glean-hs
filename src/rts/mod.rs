@@ -9,3 +9,4 @@ pub mod define;
 pub mod stacked;
 pub mod factset;
 pub mod bytecode;
+pub mod inventory;

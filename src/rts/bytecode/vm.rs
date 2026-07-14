@@ -17,6 +17,7 @@ use crate::rts::bytecode::frame::Frame;
 use crate::rts::bytecode::syscall::{SysCalls, ExitReason};
 
 /// A compiled subroutine — an immutable bytecode program.
+#[derive(Debug)]
 pub struct Subroutine {
     /// The instruction stream. Each u64 word contains:
     ///   bits 0-7:   opcode (Op as u8)
