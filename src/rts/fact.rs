@@ -12,7 +12,6 @@
 //! FactRef is a borrowed reference to a fact's id, type, and data.
 
 use crate::rts::id::{Id, Pid};
-use crate::rts::binary::{Input, Output};
 
 /// A stored fact — the fundamental unit of data in Glean.
 ///

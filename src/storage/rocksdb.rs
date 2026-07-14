@@ -18,13 +18,11 @@
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
-use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
 use rocksdb::{
-    DB, Options, BlockBasedOptions, Cache as RocksCache,
-    ColumnFamilyDescriptor,
+    DB, Options, BlockBasedOptions, Cache as RocksCache
 };
 
 // ── Error handling helpers ────────────────────────────────────────────────────
@@ -109,11 +107,15 @@ pub extern "C" fn glean_rocksdb_cache_capacity(
 // ── Container (RocksDB instance) ──────────────────────────────────────────────
 
 /// Open mode matching Glean's C++ open modes.
+#[allow(dead_code)]
 const MODE_READ_ONLY:  c_int = 0;
+#[allow(dead_code)]
 const MODE_READ_WRITE: c_int = 1;
+#[allow(dead_code)]
 const MODE_CREATE:     c_int = 2;
 
 /// An open RocksDB container (the raw database files on disk).
+#[allow(dead_code)]
 pub struct GleanContainer {
     path: String,
     db:   Arc<DB>,
@@ -180,6 +182,7 @@ pub extern "C" fn glean_rocksdb_container_open(
 // ── Database (logical database within a container) ────────────────────────────
 
 /// A logical Glean database within a RocksDB container.
+#[allow(dead_code)]
 pub struct GleanDatabase {
     container: Arc<DB>,
     start_id:  u64,   // Fid — first fact ID
@@ -314,7 +317,7 @@ pub extern "C" fn glean_rocksdb_retrieve(
         }
         Ok(Some(data)) => {
             let len  = data.len();
-            let ptr  = data.as_ptr();
+            let _ptr = data.as_ptr();
             // Leak the Vec — Haskell will free via glean_rocksdb_free_bytes
             let data = data.into_boxed_slice();
             unsafe {

@@ -10,7 +10,6 @@
 use std::sync::Arc;
 use crate::rts::id::{Id, Pid};
 use crate::rts::fact::Clause;
-use crate::rts::binary::Output;
 use crate::rts::bytecode::vm::Subroutine;
 use crate::rts::bytecode::syscall::SysCalls;
 
@@ -64,7 +63,7 @@ impl Predicate {
     pub fn typecheck<S: SysCalls>(
         &self,
         syscalls: &mut S,
-        clause:   Clause<'_>,
+        _clause:  Clause<'_>,
     ) -> Result<(Vec<u8>, usize), String> {
         let mut frame = self.typechecker.new_frame();
 
@@ -80,7 +79,6 @@ impl Predicate {
         // For now, provide the output buffer to collect results.
         // The actual pointer setup depends on the Haskell FFI
         // calling convention — stubbed for Phase 9.
-        let _ = clause; // used in Phase 11 with full FFI
 
         use crate::rts::bytecode::syscall::ExitReason;
         match self.typechecker.execute(&mut frame, syscalls) {
@@ -103,10 +101,9 @@ impl Predicate {
     pub fn traverse<S: SysCalls>(
         &self,
         syscalls: &mut S,
-        clause:   Clause<'_>,
-        mut f:    impl FnMut(Id, Pid),
+        _clause:  Clause<'_>,
+        _f:       impl FnMut(Id, Pid),
     ) -> Result<(), String> {
-        let _ = (clause, &mut f); // used in Phase 11 with full FFI
 
         use crate::rts::bytecode::syscall::ExitReason;
         let mut frame = self.traverser.new_frame();

@@ -9,7 +9,7 @@
 //! Both use Glean's custom nat encoding (nat.rs) and
 //! string mangling (string.rs) for their respective operations.
 
-use crate::rts::nat::{store_nat, load_trusted_nat, MAX_NAT_SIZE, EncodedNat};
+use crate::rts::nat::{store_nat, load_trusted_nat, MAX_NAT_SIZE};
 use crate::rts::string::{mangle_string, demangle_trusted_string, skip_trusted_string};
 use smallvec::SmallVec;
 

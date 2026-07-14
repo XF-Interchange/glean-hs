@@ -5,13 +5,12 @@
 //! The VM executes a Subroutine against a Frame, dispatching on
 //! each opcode in sequence. Execution continues until Ret or Suspend.
 
-use crate::rts::nat::{load_trusted_nat, store_nat, skip_trusted_nat, MAX_NAT_SIZE};
+use crate::rts::nat::{load_trusted_nat, skip_trusted_nat, MAX_NAT_SIZE};
 use crate::rts::string::{
     mangle_string, demangle_trusted_string,
     skip_trusted_string, to_lower_string,
     validate_untrusted_string,
 };
-use crate::rts::binary::Output;
 use crate::rts::bytecode::opcode::Op;
 use crate::rts::bytecode::frame::Frame;
 use crate::rts::bytecode::syscall::{SysCalls, ExitReason};

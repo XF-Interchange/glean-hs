@@ -326,7 +326,7 @@ mod tests {
             let val = format!("val{}", i);
             let mut data = key.as_bytes().to_vec();
             data.extend_from_slice(val.as_bytes());
-            let clause = Clause::new(&data, key.len() as u32, val.len() as u32);
+            let _clause = Clause::new(&data, key.len() as u32, val.len() as u32);
             // We need owned data — use define with a temp buffer
             let _ = fs.define(Pid(1), Clause::new(
                 Box::leak(data.into_boxed_slice()),
