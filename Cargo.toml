@@ -25,3 +25,7 @@ tracing    = "0.1"
 [dev-dependencies]
 tempfile = "3"
 quickcheck = "1"
+
+[lib]
+name = "glean_hs"
+crate-type = ["cdylib", "rlib"]

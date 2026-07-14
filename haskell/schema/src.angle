@@ -1,0 +1,45 @@
+# glean-hs source code schema — Version 1 DRAFT
+# Defines predicates for indexing Haskell source code
+# via GHC HIE files.
+#
+# Status: DRAFT — not yet frozen
+# Freeze after integration testing against real HIE files.
+
+schema src.1 {
+
+predicate File : string
+
+predicate Pos : { line : nat, col : nat }
+
+predicate Span :
+  { file  : File
+  , start : Pos
+  , end_  : Pos
+  }
+
+predicate Module :
+  { name : string
+  , file : File
+  }
+
+predicate Definition :
+  { name    : string
+  , module_ : string
+  , span    : Span
+  }
+
+predicate Reference :
+  { name    : string
+  , module_ : string
+  , span    : Span
+  , target  : maybe string
+  }
+
+predicate Import :
+  { from      : string
+  , target    : string
+  , qualified : bool
+  , alias     : maybe string
+  }
+
+}

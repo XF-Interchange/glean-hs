@@ -1,0 +1,8 @@
+packages: glean-hs.cabal
+
+package glean-hs
+  extra-lib-dirs: /Users/chas/coding-environment/src/haskell/projects/glean-hs/target/release
+  haddock: False
+
+-- Allow newer base versions
+allow-newer: base
