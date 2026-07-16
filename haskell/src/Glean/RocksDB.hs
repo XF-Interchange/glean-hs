@@ -85,12 +85,16 @@ rocksDbOpen config = do
       throwIO $ StorageOpenFailed
         (Text.pack $ "Failed to open database: " ++ show e)
 
-  -- Initialize mutable state
+  -- Read persisted metadata from RocksDB
+  factCount  <- Glean.FFI.getMeta db "meta:fact_count"
+  batchCount <- Glean.FFI.getMeta db "meta:batch_count"
+
+  -- Initialize mutable state from persisted values
   propsRef  <- newIORef $ DbProperties
     { propVersion     = dbVersion config
     , propFirstId     = dbStartId config
-    , propFirstFreeId = dbStartId config
-    , propFactCount   = 0
+    , propFirstFreeId = dbStartId config + factCount
+    , propFactCount   = fromIntegral factCount
     }
   closedRef <- newIORef False
 
@@ -127,6 +131,7 @@ instance Storage RocksDB where
       then return ()  -- nothing to store
       else do
         Glean.FFI.store (rocksDatabase rdb) bytes
+                        (fromIntegral (batchCount batch))
           `catch` \(e :: SomeException) ->
             throwIO $ StorageWriteFailed
               (Text.pack $ "store failed: " ++ show e)

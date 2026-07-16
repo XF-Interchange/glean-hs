@@ -20,9 +20,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use rocksdb::{
-    DB, Options, BlockBasedOptions, Cache as RocksCache
+    DB, Options, BlockBasedOptions, Cache as RocksCache,
 };
 
 // ── Error handling helpers ────────────────────────────────────────────────────
@@ -107,11 +108,9 @@ pub extern "C" fn glean_rocksdb_cache_capacity(
 // ── Container (RocksDB instance) ──────────────────────────────────────────────
 
 /// Open mode matching Glean's C++ open modes.
-#[allow(dead_code)]
 const MODE_READ_ONLY:  c_int = 0;
 #[allow(dead_code)]
 const MODE_READ_WRITE: c_int = 1;
-#[allow(dead_code)]
 const MODE_CREATE:     c_int = 2;
 
 /// An open RocksDB container (the raw database files on disk).
@@ -184,9 +183,10 @@ pub extern "C" fn glean_rocksdb_container_open(
 /// A logical Glean database within a RocksDB container.
 #[allow(dead_code)]
 pub struct GleanDatabase {
-    container: Arc<DB>,
-    start_id:  u64,   // Fid — first fact ID
-    version:   i64,   // DB version number
+    container:     Arc<DB>,
+    start_id:      u64,        // Fid — first fact ID
+    version:       i64,        // DB version number
+    batch_counter: Arc<AtomicU64>, // monotonically increasing, never decrements
 }
 
 /// Open a logical database within an existing container.
@@ -211,9 +211,10 @@ pub extern "C" fn glean_rocksdb_container_open_database(
     let db = unsafe { Arc::clone(&(*container).db) };
 
     let database = Box::new(GleanDatabase {
-        container: db,
+        container:     db,
         start_id,
         version,
+        batch_counter: Arc::new(AtomicU64::new(0)),
     });
 
     unsafe { *out = Box::into_raw(database); }
@@ -275,21 +276,84 @@ pub extern "C" fn glean_rocksdb_restore(
 /// Called by Glean's Haskell store() method.
 #[no_mangle]
 pub extern "C" fn glean_rocksdb_store(
-    db:    *mut GleanDatabase,
-    data:  *const u8,
-    len:   usize,
+    db:         *mut GleanDatabase,
+    data:       *const u8,
+    len:        usize,
+    fact_count: u64,   // exact number of facts in this batch
 ) -> *mut c_char {
     if db.is_null() || (data.is_null() && len > 0) {
         return error_cstring("glean_rocksdb_store: null pointer");
     }
 
-    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
-    let db_ref = unsafe { &(*db).container };
+    let bytes   = unsafe { std::slice::from_raw_parts(data, len) };
+    let db_ref  = unsafe { &(*db).container };
+    let counter = unsafe { &(*db).batch_counter };
 
-    match db_ref.put(b"facts", bytes) {
+    // Monotonically incrementing batch key — never decrements.
+    // Gaps are acceptable if batches are deleted.
+    let batch_id = counter.fetch_add(1, Ordering::SeqCst);
+    let batch_key = format!("batch:{:016}", batch_id);
+
+    // Read current metadata counts from RocksDB
+    let current_fact_count: u64 = db_ref
+        .get(b"meta:fact_count")
+        .ok()
+        .flatten()
+        .and_then(|v| v.try_into().ok().map(u64::from_le_bytes))
+        .unwrap_or(0);
+
+    let current_batch_count: u64 = db_ref
+        .get(b"meta:batch_count")
+        .ok()
+        .flatten()
+        .and_then(|v| v.try_into().ok().map(u64::from_le_bytes))
+        .unwrap_or(0);
+
+    // Compute new counts using exact fact_count from Haskell
+    let new_batch_count = current_batch_count + 1;
+    let new_fact_count  = current_fact_count + fact_count;
+
+    // Write batch data + metadata atomically
+    let mut write_batch = rocksdb::WriteBatch::default();
+    write_batch.put(batch_key.as_bytes(), bytes);
+    write_batch.put(b"meta:fact_count",  &new_fact_count.to_le_bytes());
+    write_batch.put(b"meta:batch_count", &new_batch_count.to_le_bytes());
+
+    match db_ref.write(write_batch) {
         Ok(_)  => ok(),
         Err(e) => error_cstring(format!("glean_rocksdb_store: {}", e)),
     }
+}
+
+
+/// Get a u64 metadata value by key.
+/// Returns 0 if the key does not exist.
+///
+/// Haskell: used by RocksDB.hs open to populate IORef
+#[no_mangle]
+pub extern "C" fn glean_rocksdb_get_meta(
+    db:      *mut GleanDatabase,
+    key:     *const c_char,
+    out:     *mut u64,
+) -> *mut c_char {
+    if db.is_null() || key.is_null() || out.is_null() {
+        return error_cstring("glean_rocksdb_get_meta: null pointer");
+    }
+    let key_str = unsafe {
+        match std::ffi::CStr::from_ptr(key).to_str() {
+            Ok(s)  => s.to_owned(),
+            Err(_) => return error_cstring("glean_rocksdb_get_meta: invalid key"),
+        }
+    };
+    let db_ref = unsafe { &(*db).container };
+    let value: u64 = db_ref
+        .get(key_str.as_bytes())
+        .ok()
+        .flatten()
+        .and_then(|v| v.try_into().ok().map(u64::from_le_bytes))
+        .unwrap_or(0);
+    unsafe { *out = value; }
+    ok()
 }
 
 /// Retrieve serialized fact data from the database.

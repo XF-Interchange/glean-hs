@@ -290,8 +290,9 @@ indexProject db config = do
     putStrLn $ "  References:  " ++ show (statsRefsFound    s)
     putStrLn $ "  Modules:     " ++ show (statsModulesFound s)
     putStrLn $ "  Errors:      " ++ show (statsErrors       s)
-  forM_ (resultModules result) $ \m ->
-    Glean.Storage.store db (serializeModule m)
+  forM_ (resultModules result) $ \m -> do
+    let batch = serializeModule m
+    Glean.Storage.store db batch
   return (resultStats result)
 
 -- Serialization

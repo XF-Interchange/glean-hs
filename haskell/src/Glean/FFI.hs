@@ -37,6 +37,7 @@ module Glean.FFI
   , store
   , retrieve
   , freeBytes
+  , getMeta
 
     -- * Error handling
   , GleanError
@@ -207,7 +208,7 @@ restore target source =
 -- ── Fact storage FFI ──────────────────────────────────────────────────────────
 
 foreign import ccall safe "glean_rocksdb_store"
-  c_store :: Ptr CDatabase -> Ptr Word8 -> CSize -> IO CString
+  c_store :: Ptr CDatabase -> Ptr Word8 -> CSize -> Word64 -> IO CString
 
 foreign import ccall safe "glean_rocksdb_retrieve"
   c_retrieve :: Ptr CDatabase -> Ptr (Ptr Word8) -> Ptr CSize -> IO CString
@@ -216,11 +217,12 @@ foreign import ccall unsafe "glean_rocksdb_free_bytes"
   c_free_bytes :: Ptr Word8 -> CSize -> IO ()
 
 -- | Store a serialized fact batch into the database.
-store :: GleanDatabase -> ByteString -> IO ()
-store db bytes =
+-- fact_count is the exact number of facts in this batch.
+store :: GleanDatabase -> ByteString -> Word64 -> IO ()
+store db bytes factCount =
   withForeignPtr db $ \dbptr ->
   BSU.unsafeUseAsCStringLen bytes $ \(ptr, len) -> do
-    err <- c_store dbptr (castPtr ptr) (fromIntegral len)
+    err <- c_store dbptr (castPtr ptr) (fromIntegral len) factCount
     checkError err
 
 -- | Retrieve serialized fact data from the database.
@@ -244,3 +246,19 @@ retrieve db =
 -- | Free bytes allocated by retrieve (called internally).
 freeBytes :: Ptr Word8 -> Int -> IO ()
 freeBytes ptr len = c_free_bytes ptr (fromIntegral len)
+
+-- ── Metadata FFI ──────────────────────────────────────────────────────────────
+
+foreign import ccall safe "glean_rocksdb_get_meta"
+  c_get_meta :: Ptr CDatabase -> CString -> Ptr Word64 -> IO CString
+
+-- | Read a u64 metadata value by key from the database.
+-- Returns 0 if the key does not exist.
+getMeta :: GleanDatabase -> String -> IO Word64
+getMeta db key =
+  withForeignPtr db $ \dbptr ->
+  withCString key $ \ckey ->
+  alloca $ \pval -> do
+    err <- c_get_meta dbptr ckey pval
+    checkError err
+    peek pval
