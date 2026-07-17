@@ -40,6 +40,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Word (Word32, Word64)
 import System.Directory (listDirectory, doesFileExist, doesDirectoryExist)
 import System.FilePath ((</>), takeExtension)
 
@@ -290,9 +291,8 @@ indexProject db config = do
     putStrLn $ "  References:  " ++ show (statsRefsFound    s)
     putStrLn $ "  Modules:     " ++ show (statsModulesFound s)
     putStrLn $ "  Errors:      " ++ show (statsErrors       s)
-  forM_ (resultModules result) $ \m -> do
-    let batch = serializeModule m
-    Glean.Storage.store db batch
+  forM_ (resultModules result) $ \m ->
+    Glean.Storage.store db (serializeModule m)
   return (resultStats result)
 
 -- Serialization
@@ -321,26 +321,36 @@ serializeModule m =
            ]
        }
 
+-- | Wrap a fact body with pid + length header.
+-- Format: word64LE(pid) + word32LE(body_len) + body_bytes
+-- This allows the deserializer to find fact boundaries.
+wrapFact :: Word64 -> Builder.Builder -> Builder.Builder
+wrapFact pid body =
+  let bodyBytes = BS.toStrict $ Builder.toLazyByteString body
+  in Builder.word64LE pid <>
+     Builder.word32LE (fromIntegral (BS.length bodyBytes)) <>
+     Builder.byteString bodyBytes
+
 serializeDef :: DefinitionFact -> Builder.Builder
-serializeDef def =
+serializeDef def = wrapFact pidDefinition $
   encodeText (defName   def) <>
   encodeText (defModule def) <>
   encodeSpan (defSpan   def)
 
 serializeRef :: ReferenceFact -> Builder.Builder
-serializeRef ref =
+serializeRef ref = wrapFact pidReference $
   encodeText (refName   ref) <>
   encodeText (refModule ref) <>
   encodeSpan (refSpan   ref) <>
   encodeText (fromMaybe Text.empty (refTarget ref))
 
 serializeMod :: ModuleFact -> Builder.Builder
-serializeMod m =
+serializeMod m = wrapFact pidModule $
   encodeText (modName m) <>
   encodeText (srcFilePath (modFile m))
 
 serializeImp :: ImportFact -> Builder.Builder
-serializeImp imp =
+serializeImp imp = wrapFact pidImport $
   encodeText (impFrom   imp) <>
   encodeText (impTarget imp) <>
   Builder.word8 (if impQualified imp then 1 else 0) <>

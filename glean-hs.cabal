@@ -48,6 +48,7 @@ library
     Glean.RocksDB
     Glean.Indexer.HIE
     Glean.Indexer.Types
+    Glean.Query
 
   build-depends:
     base                 >= 4.16 && < 5,

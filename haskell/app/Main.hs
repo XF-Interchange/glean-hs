@@ -4,7 +4,9 @@
 --
 -- Usage:
 --   glean-hs index --hie-dir .hie --db /tmp/mydb
---   glean-hs query --db /tmp/mydb "where is validateCDTCode defined?"
+--   glean-hs query --db /tmp/mydb "validateCDTCode"
+--   glean-hs query --db /tmp/mydb "ref:validateCDTCode"
+--   glean-hs query --db /tmp/mydb "mod:Glean.Storage"
 
 module Main (main) where
 
@@ -18,6 +20,8 @@ import System.IO (hPutStrLn, stderr)
 import Glean.RocksDB (RocksDB)
 import Glean.Storage
 import Glean.Indexer.HIE
+import Glean.Indexer.Types
+import Glean.Query
 
 -- ── CLI options ───────────────────────────────────────────────────────────────
 
@@ -28,9 +32,9 @@ data Command
   deriving (Show)
 
 data IndexOptions = IndexOptions
-  { idxHieDir  :: FilePath
-  , idxDbPath  :: FilePath
-  , idxVerbose :: Bool
+  { idxHieDir   :: FilePath
+  , idxDbPath   :: FilePath
+  , idxVerbose  :: Bool
   , idxMaxFiles :: Maybe Int
   } deriving (Show)
 
@@ -74,7 +78,7 @@ queryOptions = QueryOptions
        <> help "Path to the glean-hs database" )
   <*> ( Text.pack <$> argument str
           ( metavar "QUERY"
-         <> help "Query string" ))
+         <> help "Query string. Prefix with ref: for references, mod: for modules" ))
 
 statsOptions :: Parser StatsOptions
 statsOptions = StatsOptions
@@ -112,12 +116,11 @@ runIndex options = do
         , cfgVerbose  = idxVerbose  options
         , cfgMaxFiles = idxMaxFiles options
         }
-
   withStorage config $ \(db :: RocksDB) -> do
     stats <- indexProject db idxCfg
     putStrLn $ "Indexed " ++ show (statsFilesIndexed stats) ++ " files"
-    putStrLn $ "  " ++ show (statsDefsFound stats) ++ " definitions"
-    putStrLn $ "  " ++ show (statsRefsFound stats) ++ " references"
+    putStrLn $ "  " ++ show (statsDefsFound    stats) ++ " definitions"
+    putStrLn $ "  " ++ show (statsRefsFound    stats) ++ " references"
     putStrLn $ "  " ++ show (statsModulesFound stats) ++ " modules"
     when (statsErrors stats > 0) $
       putStrLn $ "  " ++ show (statsErrors stats) ++ " errors"
@@ -132,10 +135,29 @@ runQuery options = do
         , dbCreate   = False
         }
   withStorage config $ \(db :: RocksDB) -> do
-    -- Query implementation — Phase 13 (Angle query language)
-    putStrLn $ "Query: " ++ Text.unpack (qryQuery options)
-    putStrLn "Query execution not yet implemented."
-    putStrLn "Angle query language integration — coming in Phase 13."
+    let q = qryQuery options
+    putStrLn $ "Query: " ++ Text.unpack q
+    if Text.pack "ref:" `Text.isPrefixOf` q
+      then do
+        refs <- findReferences db (Text.drop 4 q)
+        if null refs
+          then putStrLn "No references found."
+          else do
+            putStrLn $ "Found " ++ show (length refs) ++ " reference(s):"
+            mapM_ printRef refs
+      else if Text.pack "mod:" `Text.isPrefixOf` q
+      then do
+        facts <- findByModule db (Text.drop 4 q)
+        if null facts
+          then putStrLn "No facts found for module."
+          else putStrLn $ "Found " ++ show (length facts) ++ " fact(s) in module."
+      else do
+        defs <- findDefinitions db q
+        if null defs
+          then putStrLn "No definitions found."
+          else do
+            putStrLn $ "Found " ++ show (length defs) ++ " definition(s):"
+            mapM_ printDef defs
 
 runStats :: StatsOptions -> IO ()
 runStats options = do
@@ -152,6 +174,21 @@ runStats options = do
     putStrLn $ "  Next ID:    " ++ show (propFirstFreeId props)
     putStrLn $ "  Facts:      " ++ show (propFactCount   props)
     putStrLn $ "  Predicates: " ++ show (length stats)
+
+-- ── Display helpers ───────────────────────────────────────────────────────────
+
+printDef :: DefinitionFact -> IO ()
+printDef d = putStrLn $
+  "  " ++ Text.unpack (defName d) ++
+  " [" ++ Text.unpack (defModule d) ++ "]" ++
+  " line " ++ show (posLine (spanStart (defSpan d)))
+
+printRef :: ReferenceFact -> IO ()
+printRef r = putStrLn $
+  "  " ++ Text.unpack (refName r) ++
+  " [" ++ Text.unpack (refModule r) ++ "]" ++
+  " line " ++ show (posLine (spanStart (refSpan r))) ++
+  maybe "" (\t -> " -> " ++ Text.unpack t) (refTarget r)
 
 -- ── Main ──────────────────────────────────────────────────────────────────────
 

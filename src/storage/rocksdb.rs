@@ -370,27 +370,35 @@ pub extern "C" fn glean_rocksdb_retrieve(
 
     let db_ref = unsafe { &(*db).container };
 
-    match db_ref.get(b"facts") {
-        Err(e) => error_cstring(format!("glean_rocksdb_retrieve: {}", e)),
-        Ok(None) => {
-            unsafe {
-                *out     = ptr::null_mut();
-                *out_len = 0;
+    // Scan all batch:* keys and concatenate their values
+    let prefix = b"batch:";
+    let iter   = db_ref.prefix_iterator(prefix);
+    let mut all_bytes: Vec<u8> = Vec::new();
+
+    for item in iter {
+        match item {
+            Err(e) => return error_cstring(
+                format!("glean_rocksdb_retrieve: {}", e)
+            ),
+            Ok((key, value)) => {
+                if !key.starts_with(prefix) { break; }
+                all_bytes.extend_from_slice(&value);
             }
-            ok()
-        }
-        Ok(Some(data)) => {
-            let len  = data.len();
-            let _ptr = data.as_ptr();
-            // Leak the Vec — Haskell will free via glean_rocksdb_free_bytes
-            let data = data.into_boxed_slice();
-            unsafe {
-                *out     = Box::into_raw(data) as *mut u8;
-                *out_len = len;
-            }
-            ok()
         }
     }
+
+    if all_bytes.is_empty() {
+        unsafe { *out = ptr::null_mut(); *out_len = 0; }
+        return ok();
+    }
+
+    let len  = all_bytes.len();
+    let data = all_bytes.into_boxed_slice();
+    unsafe {
+        *out     = Box::into_raw(data) as *mut u8;
+        *out_len = len;
+    }
+    ok()
 }
 
 /// Free bytes allocated by glean_rocksdb_retrieve.
