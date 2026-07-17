@@ -1,125 +1,348 @@
 # glean-hs
 
-> Docker-free Haskell code indexing — a Rust-native reimplementation of Meta Glean's dependency stack for the Haskell ecosystem.
+> Docker-free Haskell code indexing — built by [XF-Interchange LLC](https://xf-interchange.ai)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## The Problem
+## What is glean-hs?
 
-[Meta Glean](https://github.com/facebookincubant/glean) is a powerful code indexing system with exceptional support for Haskell. It enables cross-module navigation, semantic search, dead code detection, and dependency analysis across large codebases.
+**glean-hs** lets you index a Haskell codebase and ask questions about it:
 
-There is one significant barrier to adoption: **Glean requires Docker**.
+```bash
+# Where is this function defined?
+glean-hs query --db ./mydb "validateCDTCode"
 
-This requirement exists because Glean's C++ dependency chain — `folly`, `RocksDB`, and `Thrift` — is difficult to build natively on macOS and Windows. The Docker container pre-packages these dependencies in a Linux environment, bypassing the build complexity entirely.
+# What calls this function?
+glean-hs query --db ./mydb "ref:validateCDTCode"
 
-For Haskell developers who prefer native tooling, this is a meaningful friction point.
-
----
-
-## The Vision
-
-**glean-hs** aims to eliminate the Docker requirement by reimplementing Glean's C++ dependency stack in Rust, using existing, well-maintained crates:
-
-```
-C++ dependency     →  Rust equivalent
-──────────────────────────────────────
-RocksDB            →  rust-rocksdb
-Thrift             →  rust Thrift implementations
-folly utilities    →  Rust standard library + crates
+# What's in this module?
+glean-hs query --db ./mydb "mod:SeidoClaims.Validation"
 ```
 
-The result: a native Haskell code indexer that runs on macOS, Linux, and Windows — no Docker required.
+Think of it like indexing a database. Without an index, finding where a
+function is defined means searching through every source file manually —
+slow for large projects. glean-hs indexes your code once and answers any
+question about it instantly, just like a database query.
 
 ---
 
-## Why Rust
+## The Problem it Solves
 
-Rust is the natural choice for this reimplementation:
+[Meta Glean](https://github.com/facebookincubant/glean) is a powerful code
+indexing system that supports Haskell. It enables go-to-definition across
+modules, find-all-references, dead code detection, and dependency analysis.
 
-- **Memory safety without GC** — same guarantee as C++, without the footguns
-- **Mature ecosystem** — `rust-rocksdb`, async runtimes, FFI tooling all exist
-- **Haskell FFI** — Rust exposes a clean C ABI that Haskell can call via `ccall`
-- **Cross-platform** — builds natively on macOS, Linux, and Windows without containers
-- **Philosophy alignment** — precision infrastructure deserves a precise implementation language
+**The barrier:** Glean requires Docker because its C++ dependencies
+(`folly`, `RocksDB`, `fbthrift`) are difficult to build natively on
+macOS and Windows.
 
----
-
-## Why This Matters for Haskell
-
-Large Haskell codebases are genuinely difficult to navigate without tooling. As projects grow beyond 20-30 modules, questions like these become expensive to answer manually:
-
-- What calls `validateCDTCode`?
-- Which modules import `Types.LLM`?
-- What is the full dependency graph of `Pipeline.AutoCorrect`?
-- Is there dead code after this refactor?
-
-Haskell Language Server (HLS) addresses some of this, but Glean's indexed, queryable approach is fundamentally more powerful for large-scale analysis.
-
-The missing piece has always been native installation. **glean-hs** fills that gap.
-
----
-
-## Intended Use Cases
-
-**1. Development tooling (primary)**
-Navigate large Haskell codebases without Docker. Cross-module semantic search, call graph analysis, dead code detection — natively on your development machine.
-
-**2. CI/CD integration**
-Run code analysis in CI pipelines without managing Docker images or container runtimes.
-
-**3. Domain intelligence layer (future)**
-Index domain-specific document corpora (e.g., payer companion guides, regulatory documentation) alongside code, enabling unified search across code and knowledge.
-
----
-
-## Project Status
-
-**Early stage — vision and architecture phase.**
-
-This project is being built in parallel with other XF-Interchange infrastructure work. Contributions, discussion, and interest are welcome.
+**glean-hs eliminates the Docker requirement** by reimplementing those C++
+dependencies in Rust:
 
 ```
-Phase 1:  Architecture design
-          Rust crate selection and evaluation
-          Haskell FFI boundary design
+C++ dependency  →  Rust equivalent
+────────────────────────────────────
+RocksDB         →  rust-rocksdb
+folly utilities →  Rust standard library + crates
+fbthrift        →  avoided entirely
+```
 
-Phase 2:  Rust core implementation
-          RocksDB indexing layer
-          Thrift serialization layer
+---
 
-Phase 3:  Haskell bindings
-          FFI wrappers
-          Query API
+## Quick Start
 
-Phase 4:  Native installer
-          macOS, Linux, Windows
-          No Docker required
+### Step 1 — Install the prerequisites
 
-Phase 5:  Glean compatibility layer
-          Drop-in replacement for existing
-          Glean Haskell workflows
+You need two tools. Both install with a single command.
+
+**Rust** (the language our storage layer is written in):
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+**GHC + Cabal** (the Haskell compiler and build tool):
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+ghcup install ghc 9.12.2
+ghcup set ghc 9.12.2
+```
+
+> **Why version 9.12.2 specifically?**
+> glean-hs uses GHC internal APIs for reading HIE files
+> (`GHC.Iface.Ext.*`). These APIs change between major GHC versions.
+> GHC 9.12.2 is the version glean-hs has been tested and built against.
+> Using a different version may cause compilation errors.
+
+### Step 2 — Build glean-hs
+
+```bash
+git clone https://github.com/XF-Interchange/glean-hs
+cd glean-hs
+cargo build --release   # builds the Rust storage layer (~4 minutes first time)
+cabal build             # builds the Haskell layer (~2 minutes first time)
+```
+
+### Step 3 — Index a Haskell project
+
+First, tell GHC to generate HIE files (the semantic data glean-hs reads):
+
+```bash
+# In your Haskell project directory:
+cabal build --ghc-options="-fwrite-ide-info -hiedir=.hie"
+```
+
+Then index it:
+
+```bash
+cabal run glean-hs -- index --hie-dir .hie --db ./mydb --verbose
+```
+
+### Step 4 — Query it
+
+```bash
+# Find where a function is defined
+cabal run glean-hs -- query --db ./mydb "myFunction"
+
+# Find all references to a function
+cabal run glean-hs -- query --db ./mydb "ref:myFunction"
+
+# Show glean-hs database statistics
+cabal run glean-hs -- stats --db ./mydb
+```
+
+---
+
+## Key Concepts
+
+### HIE Files — What They Are
+
+When GHC compiles your Haskell code, it understands everything about it —
+what every name means, what type every expression has, and where every
+function is defined.
+
+Normally GHC uses this knowledge just to compile your code and then
+discards it. With the `-fwrite-ide-info` flag, GHC saves that knowledge
+to `.hie` files in your project directory.
+
+glean-hs reads those `.hie` files. It doesn't parse your Haskell source
+directly — GHC already did the hard work. glean-hs just reads what GHC
+understood.
+
+You don't need to understand the format of these files. Just tell GHC to
+generate them, and glean-hs handles the rest.
+
+### Facts and Predicates — Plain English
+
+A **fact** is one piece of information about your code. For example:
+
+> "The function `validateCDTCode` is defined in `SeidoClaims.Validation` at line 42"
+
+That's one fact.
+
+A **predicate** is the category a fact belongs to — think of it like a
+table name in a database:
+
+| Predicate | What it stores |
+|-----------|----------------|
+| `src.Definition` | A name defined at a location |
+| `src.Reference` | A name used at a location |
+| `src.Module` | A Haskell module and its source file |
+| `src.Import` | A module import relationship |
+
+glean-hs stores thousands of facts about your code. When you run a query,
+it searches those facts and returns the ones that match.
+
+### Schema
+
+The schema defines what kinds of facts exist. glean-hs uses `src.1` —
+a minimal, general-purpose schema the community can extend for their
+own domains. See `haskell/schema/src.angle` and `haskell/schema/SCHEMA.md`.
+
+---
+
+## Building on Different Operating Systems
+
+### macOS ✅ Tested
+
+Works out of the box. No extra steps.
+
+```bash
+cargo build --release
+cabal build
+```
+
+**About the linker warning:**
+
+You may see this during `cargo build`:
+```
+ld: warning: object file was built for newer macOS version (26.x) than being linked (10.12)
+```
+
+**What causes it:** `librocksdb-sys` is compiled by your Rust toolchain
+targeting your current macOS version. But Cargo's default minimum
+deployment target is macOS 10.12 (2016) — a very old version set to
+maximize compatibility. The linker sees the mismatch and warns you.
+
+**Why it's harmless:** The binary links and runs correctly on your machine.
+It simply wouldn't run on actual macOS 10.12 — which nobody uses anymore.
+
+**To suppress it permanently** (add to your `~/.zshrc`):
+```bash
+export MACOSX_DEPLOYMENT_TARGET=14.0
+```
+This setting persists across macOS updates — you only need to set it once.
+
+### Linux ✅ Should work
+
+The same build steps apply. Community testing welcome — please open an
+issue if you encounter problems.
+
+### Windows ⚠️ Extra steps required
+
+`rust-rocksdb` requires C++ compilation on Windows:
+
+1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/)
+   — select the **"Desktop development with C++"** workload
+2. Install [LLVM](https://releases.llvm.org/) and check
+   **"Add LLVM to the system PATH"** during installation
+3. Then build normally:
+
+```bash
+cargo build --release
+cabal build
+```
+
+**Note:** The first `cargo build --release` will be slow (several minutes)
+because it compiles RocksDB's C++ source from scratch. Subsequent builds
+are fast due to caching.
+
+---
+
+## GHC Version Compatibility
+
+glean-hs is built and tested with **GHC 9.12.2**.
+
+The HIE indexer uses GHC internal APIs which may change between major
+GHC versions. If you upgrade GHC, you may need to update the imports
+in `haskell/src/Glean/Indexer/HIE.hs`. The `hie-compat` library
+(already a dependency) abstracts some of these differences.
+
+---
+
+## CLI Reference
+
+```
+glean-hs index  --hie-dir DIR  --db PATH [--verbose] [--max-files N]
+glean-hs query  --db PATH  QUERY
+glean-hs stats  --db PATH
+```
+
+### Query syntax
+
+| Query | Returns |
+|-------|---------|
+| `"functionName"` | Definitions of that name |
+| `"ref:functionName"` | References to that name |
+| `"mod:Module.Name"` | All facts in that module |
+
+---
+
+## Beyond Code Indexing
+
+glean-hs is not limited to Haskell code. Any structured knowledge domain
+can be expressed as Glean facts and queried with Angle:
+
+- **Biological pathways** — genes, proteins, interactions
+- **Transportation networks** — routes, carriers, schedules
+- **Supply chains** — components, suppliers, shipments
+- **Medical ontologies** — conditions, procedures, anatomy
+
+See `haskell/schema/src.angle` for the base schema. Extend it for your domain.
+
+*"It's all in the schemas."*
+
+---
+
+## Known Limitations
+
+- **Query performance:** Currently O(n) — scans all stored batches.
+  Sufficient for small projects. Composite key storage planned for
+  large codebases (50K+ facts).
+
+- **Import indexing:** Import facts are stubbed — coming in a future release.
+
+- **Angle query language:** Full Angle integration is planned. Current
+  queries use direct storage access.
+
+- **cabal path warning:** A known warning about `target/release` path
+  during `cabal build` is harmless and does not affect functionality.
+
+---
+
+## Project Structure
+
+```
+glean-hs/
+├── src/
+│   ├── rts/           # Rust runtime substrate
+│   │   ├── id.rs      # Id, Pid types
+│   │   ├── fact.rs    # Fact, Clause, FactRef
+│   │   ├── factset.rs # Two-index FactSet
+│   │   ├── bytecode/  # VM (opcode, frame, syscall, vm)
+│   │   └── inventory.rs
+│   └── storage/
+│       └── rocksdb.rs # C-ABI functions for Haskell FFI
+├── haskell/
+│   ├── src/Glean/
+│   │   ├── FFI.hs     # Rust FFI bindings
+│   │   ├── Storage.hs # Storage typeclass
+│   │   ├── RocksDB.hs # RocksDB implementation
+│   │   ├── Query.hs   # Direct query layer
+│   │   └── Indexer/
+│   │       ├── HIE.hs     # GHC HIE file reader
+│   │       └── Types.hs   # Fact types
+│   ├── app/
+│   │   └── Main.hs    # CLI
+│   └── schema/
+│       ├── src.angle  # Schema definition (DRAFT)
+│       └── SCHEMA.md  # Schema documentation
+└── glean-hs.cabal
 ```
 
 ---
 
 ## Relationship to Meta Glean
 
-glean-hs is not a fork of Meta Glean. It is an independent reimplementation of the infrastructure layer that Glean depends on, with the goal of enabling native installation of Glean-compatible tooling for Haskell developers.
+glean-hs is inspired by and compatible with
+[Meta Glean](https://github.com/facebookincubator/glean).
 
-Meta Glean's query language, schema design, and indexing approach are referenced as prior art and inspiration. All implementation in this repository is original.
+Meta Glean is a production-grade, battle-tested system running at massive
+scale inside Meta. If you are on Linux and comfortable with Docker,
+Meta Glean is worth evaluating directly.
+
+glean-hs solves a specific problem Meta Glean has: building natively on
+macOS and Windows without Docker. It is not a replacement for Meta Glean —
+it is a portable on-ramp to the same ecosystem.
+
+Schema compatibility with Meta Glean's `src.1` is a goal for future releases.
 
 ---
 
 ## Contributing
 
-This project is in its early stages. If you are interested in:
+glean-hs is open source under the MIT license.
+Contributions welcome — especially:
 
-- Rust systems programming
-- Haskell FFI
-- Developer tooling for functional languages
-- Eliminating unnecessary Docker dependencies from the Haskell ecosystem
+- Testing on Linux and Windows
+- Domain schemas (biology, transport, supply chain, medical)
+- LMDB backend (30-40% faster per Meta Glean benchmarks)
+- Pure-Rust storage backend (Fjall/Redb) for Windows
+- Angle query language integration
 
-...your contributions are welcome. Open an issue to discuss ideas before submitting a PR.
+Open an issue or pull request at
+[github.com/XF-Interchange/glean-hs](https://github.com/XF-Interchange/glean-hs).
 
 ---
 
@@ -127,10 +350,4 @@ This project is in its early stages. If you are interested in:
 
 MIT — see [LICENSE](LICENSE)
 
----
-
-## About XF-Interchange LLC
-
-XF-Interchange LLC identifies critical gaps in industries where data integrity is not optional — and builds the precision infrastructure to fill them.
-
-[xf-interchange.ai](https://xf-interchange.ai)
+Built by [XF-Interchange LLC](https://xf-interchange.ai)
