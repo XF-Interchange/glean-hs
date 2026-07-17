@@ -491,7 +491,7 @@ mod tests {
 
         // Store some data
         let data = b"hello glean";
-        let err = glean_rocksdb_store(db_ptr, data.as_ptr(), data.len());
+        let err = glean_rocksdb_store(db_ptr, data.as_ptr(), data.len(), 0);
         assert!(err.is_null(), "expected no error storing");
 
         // Retrieve it back
