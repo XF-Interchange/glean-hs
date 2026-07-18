@@ -33,13 +33,8 @@ module Glean.Query
   , QueryResult (..)
   ) where
 
-import Control.Exception (try, SomeException)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Lazy as LBS
-import Data.Int (Int64)
-import Data.List (isPrefixOf)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -164,7 +159,7 @@ readWord64LE bs
   | BS.length bs < 8 = Nothing
   | otherwise =
       let (w, rest) = BS.splitAt 8 bs
-          val = foldr (\(i, b) acc -> acc + fromIntegral b * (256^i))
+          val = foldr (\(i, b) acc -> acc + fromIntegral b * (256 :: Word64)^(i :: Int))
                       0
                       (zip [0..7] (BS.unpack w))
       in Just (val, rest)
@@ -174,7 +169,7 @@ readWord32LE bs
   | BS.length bs < 4 = Nothing
   | otherwise =
       let (w, rest) = BS.splitAt 4 bs
-          val = foldr (\(i, b) acc -> acc + fromIntegral b * (256^i))
+          val = foldr (\(i, b) acc -> acc + fromIntegral b * (256 :: Word32)^(i :: Int))
                       0
                       (zip [0..3] (BS.unpack w))
       in Just (val, rest)

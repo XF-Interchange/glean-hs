@@ -35,12 +35,11 @@ import Data.IORef
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe, fromMaybe)
-import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Data.Word (Word32, Word64)
+import Data.Word (Word64)
 import System.Directory (listDirectory, doesFileExist, doesDirectoryExist)
 import System.FilePath ((</>), takeExtension)
 
@@ -51,14 +50,14 @@ import GHC.Iface.Ext.Types
   , HieAST (..)
   , NodeInfo (..)
   , SourcedNodeInfo (..)
-  , Identifier (..)
+  , Identifier
   , IdentifierDetails (..)
   , ContextInfo (..)
-  , DeclType (..)
+
   , getAsts
   )
 import GHC.Iface.Ext.Binary (readHieFile, HieFileResult(..))
-import GHC.Types.Name.Cache (NameCache, initNameCache)
+import GHC.Types.Name.Cache (initNameCache)
 import GHC.Types.Name (nameOccName, nameModule_maybe, occNameString)
 import GHC.Types.SrcLoc
   ( RealSrcSpan

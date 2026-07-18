@@ -24,14 +24,9 @@ module Glean.RocksDB
   ) where
 
 import Control.Exception (throwIO, catch, SomeException)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.Int (Int64)
 import Data.IORef
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
-import Data.Text (Text)
 import qualified Data.Text as Text
 
 import Glean.FFI
@@ -87,7 +82,7 @@ rocksDbOpen config = do
 
   -- Read persisted metadata from RocksDB
   factCount  <- Glean.FFI.getMeta db "meta:fact_count"
-  batchCount <- Glean.FFI.getMeta db "meta:batch_count"
+  _batchCount <- Glean.FFI.getMeta db "meta:batch_count"
 
   -- Initialize mutable state from persisted values
   propsRef  <- newIORef $ DbProperties

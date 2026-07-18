@@ -37,15 +37,14 @@ module Glean.Storage
   , withStorage
   ) where
 
-import Control.Exception (Exception, bracket, throwIO)
+import Control.Exception (Exception, bracket)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import Data.Word (Word32, Word64)
+import Data.Word (Word64)
 
 -- ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -56,10 +55,8 @@ data StorageError
   | StorageReadFailed Text     -- ^ Failed to read facts
   | StorageCloseFailed Text    -- ^ Failed to close database
   | StorageCorrupted Text      -- ^ Database corruption detected
-  | StorageVersionMismatch
-      { expected :: Int64
-      , actual   :: Int64
-      }                        -- ^ Schema version mismatch
+  | StorageVersionMismatch Int64 Int64
+      -- ^ Schema version mismatch (expected, actual)
   deriving (Show)
 
 instance Exception StorageError
