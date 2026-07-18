@@ -81,6 +81,23 @@ ghcup set ghc 9.12.2
 git clone https://github.com/XF-Interchange/glean-hs
 cd glean-hs
 cargo build --release   # builds the Rust storage layer (~4 minutes first time)
+```
+
+**Before running `cabal build`**, create a local Cabal override file that
+tells the Haskell build system where to find the Rust library you just built.
+Run this once in the project root:
+
+```bash
+echo "package glean-hs" > cabal.project.local
+echo "  extra-lib-dirs: $(pwd)/target/release" >> cabal.project.local
+```
+
+> This file is gitignored — it's specific to your machine and never
+> committed to the repository. Every developer creates their own copy.
+
+Then build the Haskell layer:
+
+```bash
 cabal build             # builds the Haskell layer (~2 minutes first time)
 ```
 
@@ -199,24 +216,33 @@ This setting persists across macOS updates — you only need to set it once.
 The same build steps apply. Community testing welcome — please open an
 issue if you encounter problems.
 
-### Windows ⚠️ Extra steps required
+### Windows
 
-`rust-rocksdb` requires C++ compilation on Windows:
+**Recommended: Use WSL2 (Windows Subsystem for Linux)**
 
-1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/)
-   — select the **"Desktop development with C++"** workload
-2. Install [LLVM](https://releases.llvm.org/) and check
-   **"Add LLVM to the system PATH"** during installation
-3. Then build normally:
+WSL2 is built into Windows 10 and 11 and gives you a full Linux environment.
+It is the easiest path for Windows users — the Linux build steps work without
+any extra configuration:
 
-```bash
-cargo build --release
-cabal build
+```powershell
+# In Windows PowerShell (run once to install WSL2):
+wsl --install
 ```
 
-**Note:** The first `cargo build --release` will be slow (several minutes)
-because it compiles RocksDB's C++ source from scratch. Subsequent builds
-are fast due to caching.
+After WSL2 is installed, open a WSL terminal and follow the
+**Linux** build instructions above.
+
+**Bare Windows (without WSL2) — not recommended for new developers**
+
+Building on bare Windows requires:
+1. [Visual Studio Build Tools](https://visualstudio.microsoft.com/)
+   with the **"Desktop development with C++"** workload
+2. [LLVM](https://releases.llvm.org/) — check **"Add LLVM to system PATH"**
+3. The first `cargo build --release` will take significantly longer
+   as it compiles RocksDB's C++ source from scratch
+
+If you are new to programming, WSL2 is strongly recommended over
+bare Windows setup.
 
 ---
 
