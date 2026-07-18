@@ -1,8 +1,13 @@
 packages: glean-hs.cabal
 
-package glean-hs
-  extra-lib-dirs: /Users/chas/coding-environment/src/haskell/projects/glean-hs/target/release
-  haddock: False
-
 -- Allow newer base versions
 allow-newer: base
+
+-- NOTE: You must create cabal.project.local before building.
+-- Run this once in the project root:
+--
+--   echo "package glean-hs" > cabal.project.local
+--   echo "  extra-lib-dirs: $(pwd)/target/release" >> cabal.project.local
+--
+-- cabal.project.local is gitignored and sets the path to
+-- the Rust library on your specific machine.

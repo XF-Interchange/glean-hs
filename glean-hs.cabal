@@ -63,7 +63,9 @@ library
 
   -- Link against our Rust substrate
   -- Run: cargo build --release  before  cabal build
-  extra-lib-dirs:   ${pkgroot}/target/release
+  -- Then create cabal.project.local with:
+  --   echo "package glean-hs" > cabal.project.local
+  --   echo "  extra-lib-dirs: $(pwd)/target/release" >> cabal.project.local
   extra-libraries:  glean_hs
 
 -- Command-line tool

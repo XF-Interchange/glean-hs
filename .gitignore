@@ -8,3 +8,4 @@ tree.txt
 dist-newstyle/
 .hie/
 .vscode/
+cabal.project.local

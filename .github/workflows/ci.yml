@@ -58,14 +58,10 @@ jobs:
       - name: Update Cabal package list
         run: cabal update
 
-      - name: Write cabal.project with absolute lib path
+      - name: Write cabal.project.local with absolute lib path
         run: |
-          echo "packages: glean-hs.cabal" > cabal.project
-          echo "" >> cabal.project
-          echo "package glean-hs" >> cabal.project
-          echo "  extra-lib-dirs: ${{ github.workspace }}/target/release" >> cabal.project
-          echo "" >> cabal.project
-          echo "allow-newer: base" >> cabal.project
+          echo "package glean-hs" > cabal.project.local
+          echo "  extra-lib-dirs: ${{ github.workspace }}/target/release" >> cabal.project.local
 
       - name: Build Haskell layer
         run: |
