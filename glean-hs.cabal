@@ -81,6 +81,26 @@ executable glean-hs
 
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
 
--- Tests (coming in a future release)
--- test-suite glean-hs-test requires haskell/test/ directory
--- which is not yet implemented
+-- Tests
+
+test-suite glean-hs-test
+  import:           common-options
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   haskell/test
+  main-is:          Spec.hs
+  other-modules:
+    Test.FFI
+    Test.Storage
+    Test.Indexer
+
+  build-depends:
+    base                 >= 4.16 && < 5,
+    bytestring           >= 0.11,
+    text                 >= 2.0,
+    hspec                >= 2.10,
+    temporary            >= 1.3,
+    filepath             >= 1.4,
+    directory            >= 1.3,
+    glean-hs,
+
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N

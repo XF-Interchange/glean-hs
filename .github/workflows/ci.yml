@@ -68,10 +68,13 @@ jobs:
           echo "allow-newer: base" >> cabal.project
 
       - name: Build Haskell layer
-        run: cabal build
+        run: |
+          export LD_LIBRARY_PATH=${{ github.workspace }}/target/release:$LD_LIBRARY_PATH
+          cabal build
 
       - name: Integration test — index glean-hs itself
         run: |
+          export LD_LIBRARY_PATH=${{ github.workspace }}/target/release:$LD_LIBRARY_PATH
           cabal build --ghc-options="-fwrite-ide-info -hiedir=.hie"
           cabal run glean-hs -- index --hie-dir .hie --db /tmp/glean-ci-test
           cabal run glean-hs -- stats --db /tmp/glean-ci-test
