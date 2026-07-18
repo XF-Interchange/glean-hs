@@ -359,13 +359,13 @@ Schema compatibility with Meta Glean's `src.1` is a goal for future releases.
 ## Contributing
 
 glean-hs is open source under the MIT license.
-Contributions welcome — especially:
 
-- Testing on Linux and Windows
-- Domain schemas (biology, transport, supply chain, medical)
-- LMDB backend (30-40% faster per Meta Glean benchmarks)
-- Pure-Rust storage backend (Fjall/Redb) for Windows
-- Angle query language integration
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed information on:
+- Priority contributions (composite keys, LMDB backend, domain schemas)
+- How to write a new language indexer
+- The fact serialization format specification
+- Running the test suite
+- Code style guidelines
 
 Open an issue or pull request at
 [github.com/XF-Interchange/glean-hs](https://github.com/XF-Interchange/glean-hs).
